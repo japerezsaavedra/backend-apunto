@@ -1,11 +1,11 @@
 # Apunto Backend API
 
-Backend API para la aplicación móvil Apunto que analiza documentos y apuntes de cualquier tipo usando OCR (Google Vision API o Tesseract.js) y Google Gemini para análisis comprensivo de texto.
+Backend API para la aplicación móvil Apunto que analiza documentos y apuntes de cualquier tipo usando Azure Document Intelligence (OCR) y Azure OpenAI (GPT-4o) para análisis comprensivo de texto.
 
 ## Características
 
-- ✅ Extracción de texto con Google Vision API (recomendado) o Tesseract.js (alternativa gratuita)
-- ✅ Análisis comprensivo con Google Gemini (gratis)
+- ✅ Extracción de texto con Azure Document Intelligence (OCR preciso y robusto)
+- ✅ Análisis comprensivo con Azure OpenAI GPT-4o via Foundry
 - ✅ Soporte para apuntes escritos a mano de cualquier índole (en pizarra, papel, cuaderno, etc.) - académicos, profesionales, personales, creativos, etc.
 - ✅ Detección de ecuaciones y fórmulas escritas a mano (si están presentes)
 - ✅ Extracción de entidades estructuradas (fechas, montos, nombres, conceptos, temas, etc.)
@@ -19,7 +19,8 @@ Backend API para la aplicación móvil Apunto que analiza documentos y apuntes d
 
 - Node.js v18 o superior
 - npm o yarn
-- Cuenta de Google para obtener API key de Gemini (gratis)
+- Suscripción de Azure (Student o cualquier otra)
+- Región recomendada: **East US 2** (compatible con suscripciones Student)
 
 ## Instalación
 
@@ -36,39 +37,48 @@ npm install
 cp env.example .env
 ```
 
-2. Edita el archivo `.env` y configura tu API key de Gemini:
+2. Edita el archivo `.env` y configura tus credenciales de Azure:
 
 ```env
-# Google Gemini (LLM para análisis de documentos)
-# Obtén tu API key en: https://aistudio.google.com/apikey
-# Esta misma API key se usa para Google Vision API si está habilitado
-GEMINI_API_KEY=tu-gemini-api-key
+# Azure Document Intelligence (OCR)
+# Región recomendada: East US 2 (compatible con suscripciones Student)
+# Documentación: https://learn.microsoft.com/azure/ai-services/document-intelligence
+# Modelo: prebuilt-read, API version: 2023-07-31
+AZURE_DOC_ENDPOINT=https://tu-instancia.cognitiveservices.azure.com/
+AZURE_DOC_KEY=tu-clave-de-document-intelligence
 
-# OCR: Configuración del servicio de extracción de texto
-# 
-# Opción 1: Google Vision API (RECOMENDADO - más preciso)
-# - Tier gratuito: 1,000 unidades/mes
-# - Después: $1.50 por cada 1,000 unidades
-# - Para usar Google Vision API, descomenta la siguiente línea:
-USE_GOOGLE_VISION_OCR=true
-# 
-# Opción 2: Tesseract.js (alternativa gratuita)
-# - Completamente gratis e ilimitado
-# - Funciona localmente (no requiere API keys)
-# - Para usar Tesseract.js, comenta o elimina USE_GOOGLE_VISION_OCR
+# Azure OpenAI (LLM - GPT-4o via Foundry)
+# Región recomendada: East US 2 (compatible con suscripciones Student)
+# Endpoint de Azure AI Services (termina en services.ai.azure.com)
+# Deployment: gpt-4o
+AZURE_OPENAI_ENDPOINT=https://tu-instancia.services.ai.azure.com/
+AZURE_OPENAI_KEY=tu-clave-de-openai
+AZURE_OPENAI_DEPLOYMENT=gpt-4o
 
 # Servidor
 PORT=3000
 CORS_ORIGIN=*
 ```
 
-### Obtener API Key de Gemini
+### Obtener Credenciales de Azure
 
-1. Ve a [Google AI Studio](https://aistudio.google.com/apikey)
-2. Inicia sesión con tu cuenta de Google
-3. Haz clic en "Create API Key" o "Get API Key"
-4. Copia la API key generada
-5. Pégala en el archivo `.env`
+#### 1. Azure Document Intelligence
+
+1. Ve al [Portal de Azure](https://portal.azure.com)
+2. Crea un recurso de **Document Intelligence** en la región **East US 2**
+3. Una vez creado, ve a "Keys and Endpoint"
+4. Copia el **Endpoint** y una de las **Keys**
+5. Pégalos en el archivo `.env` como `AZURE_DOC_ENDPOINT` y `AZURE_DOC_KEY`
+
+#### 2. Azure OpenAI (Foundry)
+
+1. Ve al [Portal de Azure](https://portal.azure.com)
+2. Crea un recurso de **Azure OpenAI** en la región **East US 2**
+3. Ve a Azure AI Foundry y crea un deployment de **gpt-4o**
+4. Obtén el **Endpoint** (debe terminar en `services.ai.azure.com`)
+5. Obtén la **Key** del recurso
+6. Copia el nombre del **Deployment** (ej: `gpt-4o`)
+7. Pégalos en el archivo `.env`
 
 ## Ejecución
 
@@ -177,8 +187,10 @@ backend/
 │   ├── routes/
 │   │   └── analyze.ts          # Ruta POST /api/analyze
 │   ├── services/
-│   │   ├── ocrService.ts       # Servicio OCR (Google Vision o Tesseract.js)
-│   │   └── geminiService.ts    # Servicio Google Gemini
+│   │   ├── ocrService.ts       # Servicio OCR (Azure Document Intelligence)
+│   │   ├── azureOpenAIService.ts # Servicio Azure OpenAI (GPT-4o)
+│   │   ├── database.ts         # Conexión a PostgreSQL
+│   │   └── historyService.ts   # Servicio de historial
 │   └── utils/
 │       └── imageConverter.ts   # Utilidades para imágenes
 ├── dist/                      # Código compilado (generado)
@@ -193,10 +205,10 @@ backend/
 
 1. **Recepción**: El backend recibe una imagen en formato base64 y una descripción
 2. **Validación**: Valida el formato y tamaño de la imagen
-3. **OCR**: Usa Google Vision API (si está configurado) o Tesseract.js para extraer texto
+3. **OCR**: Usa Azure Document Intelligence para extraer texto
 4. **Extracción**: Obtiene el texto extraído del documento o apunte
-5. **Análisis**: Envía el texto extraído y la descripción a Google Gemini
-6. **Análisis comprensivo**: Gemini analiza el contenido y detecta:
+5. **Análisis**: Envía el texto extraído y la descripción a Azure OpenAI (GPT-4o)
+6. **Análisis comprensivo**: GPT-4o analiza el contenido y detecta:
    - Tipo de documento (apunte, factura, nota, etc.)
    - Tema, contexto o área de conocimiento (si es un apunte)
    - Conceptos principales y temas tratados
@@ -238,32 +250,31 @@ El sistema puede detectar y extraer:
 
 ## Tecnologías Utilizadas
 
-### OCR: Google Vision API (Recomendado)
-- ✅ Tier gratuito: 1,000 unidades/mes
+### OCR: Azure Document Intelligence
+
+- ✅ Modelo: `prebuilt-read`
+- ✅ API version: `2023-07-31`
 - ✅ Alta precisión, especialmente para texto escrito a mano
-- ✅ Buen rendimiento con ecuaciones
-- ⚠️ Después del límite: $1.50 por cada 1,000 unidades
+- ✅ Buen rendimiento con ecuaciones y fórmulas
+- ✅ Procesamiento asíncrono con polling
+- ⚠️ Requiere suscripción de Azure
 
-### OCR: Tesseract.js (Alternativa)
-- ✅ Completamente gratuito e ilimitado
-- ✅ Open source
-- ✅ Funciona localmente (no requiere API externa)
-- ✅ Soporta más de 100 idiomas
-- ⚠️ Puede ser menos preciso que Google Vision API
+### LLM: Azure OpenAI (GPT-4o)
 
-### LLM: Google Gemini
-- ✅ Tier gratuito generoso (60 RPM, 1,500 RPD)
+- ✅ Desplegado via Azure AI Foundry
+- ✅ Endpoint: `services.ai.azure.com`
 - ✅ Excelente para análisis de texto y comprensión de contexto
 - ✅ Capaz de analizar apuntes escritos a mano de cualquier índole
 - ✅ Detecta y explica ecuaciones si están presentes
 - ✅ Soporte para múltiples idiomas
+- ✅ Respuestas siempre en español
 
 ## Límites y Validaciones
 
 - Tamaño máximo de imagen: 10MB
 - Formatos soportados: JPEG, PNG, GIF, WebP
 - La imagen debe ser un data URI válido (data:image/...;base64,...)
-- Idiomas OCR soportados: Español e Inglés (configurable en Google Vision API)
+- Idiomas OCR soportados: Múltiples idiomas (configurado en Azure Document Intelligence)
 
 ## Seguridad
 
@@ -275,11 +286,18 @@ El sistema puede detectar y extraer:
 
 ## Troubleshooting
 
-### Error: "Google Gemini no está configurado"
+### Error: "Azure Document Intelligence no está configurado"
 
-- Verifica que `GEMINI_API_KEY` esté en tu archivo `.env`
+- Verifica que `AZURE_DOC_ENDPOINT` y `AZURE_DOC_KEY` estén en tu archivo `.env`
 - Asegúrate de que el archivo `.env` esté en la raíz del proyecto `backend/`
-- Verifica que la API key sea válida
+- Verifica que las credenciales sean válidas
+- Verifica que el endpoint termine en `cognitiveservices.azure.com`
+
+### Error: "Azure OpenAI no está configurado"
+
+- Verifica que `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_KEY` y `AZURE_OPENAI_DEPLOYMENT` estén en `.env`
+- Verifica que el endpoint termine en `services.ai.azure.com` (Foundry)
+- Verifica que el deployment name sea correcto (ej: `gpt-4o`)
 
 ### Error: CORS
 
@@ -292,13 +310,13 @@ El sistema puede detectar y extraer:
 - Verifica que la imagen sea legible y contenga texto
 - Verifica que el formato de imagen sea soportado
 - Asegúrate de que la imagen no esté corrupta
-- Para texto escrito a mano, Google Vision API suele funcionar mejor que Tesseract.js
+- Azure Document Intelligence funciona bien con texto escrito a mano
 
-### Error: Google Vision API no funciona
+### Error: OCR timeout
 
-- Verifica que `USE_GOOGLE_VISION_OCR=true` esté en `.env`
-- Verifica que `GEMINI_API_KEY` sea válida y tenga permisos para Vision API
-- Si falla, el sistema automáticamente usará Tesseract.js como respaldo
+- El OCR de Azure puede tardar unos segundos en procesar
+- El sistema hace polling automático hasta obtener resultados
+- Si el error persiste, verifica la conectividad con Azure
 
 ## Desarrollo
 
@@ -318,17 +336,17 @@ El sistema puede detectar y extraer:
 
 ## Costos
 
-### Google Vision API (OCR - Opcional)
-- **Gratis**: 1,000 unidades/mes
-- Después: $1.50 por cada 1,000 unidades
+### Azure Document Intelligence (OCR)
 
-### Tesseract.js OCR (Alternativa)
-- **Gratis**: Sin límites, funciona localmente
-- No requiere API keys ni servicios externos
+- **Tier gratuito**: Consulta los límites actuales en Azure
+- Después: Consulta precios en el [Portal de Azure](https://azure.microsoft.com/pricing/details/ai-document-intelligence/)
+- Región recomendada: **East US 2** (compatible con suscripciones Student)
 
-### Google Gemini (LLM)
-- **Gratis**: 60 requests por minuto, 1,500 requests por día
-- Después: Consulta precios en Google AI Studio
+### Azure OpenAI (GPT-4o)
+
+- **Suscripción Student**: Créditos gratuitos disponibles
+- Después: Consulta precios en el [Portal de Azure](https://azure.microsoft.com/pricing/details/cognitive-services/openai-service/)
+- Región recomendada: **East US 2** (compatible con suscripciones Student)
 
 ## Licencia
 

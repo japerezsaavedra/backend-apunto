@@ -1,12 +1,7 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-
-const apiKey = process.env.GEMINI_API_KEY;
-
-if (!apiKey) {
-  console.warn('Google Gemini no está configurado. Variable de entorno GEMINI_API_KEY faltante.');
-}
-
-const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
+/**
+ * Servicio de Azure OpenAI para análisis de documentos
+ * Usa GPT-4o desplegado en Azure AI Foundry (services.ai.azure.com)
+ */
 
 export interface DetectedEntity {
   type: string; // "fecha", "monto", "nombre", "dirección", "teléfono", "email", "ecuacion", "formula", "tema", "concepto", "contexto", etc.
@@ -14,7 +9,7 @@ export interface DetectedEntity {
   confidence: string; // "alta", "media", "baja"
 }
 
-export interface GeminiAnalysisResult {
+export interface AzureOpenAIAnalysisResult {
   summary: string;
   label: string;
   detectedInfo: {
@@ -26,26 +21,29 @@ export interface GeminiAnalysisResult {
   tags: string[]; // Múltiples etiquetas para mejor categorización
 }
 
+const AZURE_OPENAI_ENDPOINT = process.env.AZURE_OPENAI_ENDPOINT;
+const AZURE_OPENAI_KEY = process.env.AZURE_OPENAI_KEY;
+const DEPLOYMENT_NAME = process.env.AZURE_OPENAI_DEPLOYMENT;
+
+if (!AZURE_OPENAI_ENDPOINT || !AZURE_OPENAI_KEY || !DEPLOYMENT_NAME) {
+  console.warn('Azure OpenAI no está configurado. Variables de entorno faltantes.');
+}
+
 /**
- * Analiza el texto extraído y genera un análisis comprensivo usando Google Gemini
+ * Analiza el texto extraído y genera un análisis comprensivo usando Azure OpenAI (GPT-4o)
  */
-export const analyzeTextWithGemini = async (
+export const analyzeTextWithAzureOpenAI = async (
   extractedText: string,
   userDescription: string
-): Promise<GeminiAnalysisResult> => {
-  if (!genAI) {
-    throw new Error('Google Gemini no está configurado. Por favor, configura la variable de entorno GEMINI_API_KEY');
+): Promise<AzureOpenAIAnalysisResult> => {
+  if (!AZURE_OPENAI_ENDPOINT || !AZURE_OPENAI_KEY || !DEPLOYMENT_NAME) {
+    throw new Error('Azure OpenAI no está configurado. Por favor, configura las variables de entorno AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_KEY y AZURE_OPENAI_DEPLOYMENT');
   }
 
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+  const apiVersion = '2024-06-01';
+  const url = `${AZURE_OPENAI_ENDPOINT.replace(/\/$/, '')}/openai/deployments/${DEPLOYMENT_NAME}/chat/completions?api-version=${apiVersion}`;
 
-  const prompt = `Eres un asistente experto en análisis y comprensión de documentos de cualquier tipo, incluyendo apuntes escritos a mano de cualquier índole (en pizarra, papel, cuaderno, etc.), notas personales, ecuaciones, diagramas, y cualquier contenido. Tu tarea es analizar profundamente el texto extraído de un documento OCR y la descripción proporcionada por el usuario.
-
-**CONTEXTO DEL USUARIO:**
-"${userDescription}"
-
-**TEXTO EXTRAÍDO DEL DOCUMENTO (OCR):**
-${extractedText}
+  const systemPrompt = `Eres un asistente experto en análisis y comprensión de documentos de cualquier tipo, incluyendo apuntes escritos a mano de cualquier índole (en pizarra, papel, cuaderno, etc.), notas personales, ecuaciones, diagramas, y cualquier contenido. Tu tarea es analizar profundamente el texto extraído de un documento OCR y la descripción proporcionada por el usuario.
 
 **INSTRUCCIONES:**
 1. **Comprensión del documento**: Analiza qué tipo de documento es y qué información contiene. Considera tanto el texto extraído como la descripción del usuario para entender el contexto completo. El documento puede ser:
@@ -105,6 +103,8 @@ ${extractedText}
 
 8. **Explicación de comprensión**: Explica brevemente qué entendiste del documento y cómo relacionaste el texto OCR con la descripción del usuario. Si es un apunte, explica los temas principales identificados. Si detectaste ecuaciones o contenido técnico, explica cómo las interpretaste.
 
+**IMPORTANTE**: Responde SIEMPRE en español, sin importar el idioma del texto de entrada.
+
 Responde SOLO con un objeto JSON válido en el siguiente formato (sin markdown, sin código, solo JSON puro):
 {
   "summary": "Resumen comprensivo del documento explicando qué es, qué contiene y qué información relevante. Si es un apunte, resume los conceptos principales. Si hay ecuaciones, explica su significado y contexto.",
@@ -124,18 +124,53 @@ Responde SOLO con un objeto JSON válido en el siguiente formato (sin markdown, 
     "understanding": "Explicación de lo que comprendiste del documento y cómo relacionaste el OCR con la descripción del usuario. Si es un apunte, explica los temas principales. Si hay ecuaciones o contenido técnico, explica cómo las interpretaste."
   },
   "tags": ["Etiqueta1", "Etiqueta2", "Etiqueta3", "Tema o contexto si es un apunte (ej: 'Historia', 'Reunión', 'Personal', 'Matemáticas', etc.)"]
-}
+}`;
 
-IMPORTANTE: Responde SOLO con el JSON, sin texto adicional, sin markdown, sin explicaciones fuera del JSON.`;
+  const userPrompt = `**CONTEXTO DEL USUARIO:**
+"${userDescription}"
+
+**TEXTO EXTRAÍDO DEL DOCUMENTO (OCR):**
+${extractedText}`;
+
+  const payload = {
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt }
+    ],
+    max_tokens: 1500,
+    temperature: 0.7
+  };
 
   try {
-    const result = await model.generateContent(prompt);
-    const response = result.response;
-    const content = response.text();
+    console.log('Iniciando análisis con Azure OpenAI (GPT-4o)...');
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'api-key': AZURE_OPENAI_KEY,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({})) as { error?: { message?: string } };
+      throw new Error(
+        errorData.error?.message || `Error de Azure OpenAI: ${response.status}`
+      );
+    }
+
+    const data = await response.json() as {
+      choices: Array<{ message: { content: string } }>;
+    };
+
+    const content = data.choices[0]?.message?.content;
 
     if (!content) {
-      throw new Error('No se recibió respuesta de Gemini');
+      throw new Error('No se recibió respuesta de Azure OpenAI');
     }
+
+    console.log('Análisis completado con Azure OpenAI');
 
     // Intentar parsear la respuesta JSON
     try {
@@ -190,11 +225,10 @@ IMPORTANTE: Responde SOLO con el JSON, sin texto adicional, sin markdown, sin ex
       };
     }
   } catch (error) {
-    console.error('Error en Google Gemini:', error);
+    console.error('Error en Azure OpenAI:', error);
     if (error instanceof Error) {
-      throw new Error(`Error al analizar el documento: ${error.message}`);
+      throw new Error(`Error al analizar el documento con Azure OpenAI: ${error.message}`);
     }
-    throw new Error('Error desconocido al analizar el documento');
+    throw new Error('Error desconocido al analizar el documento con Azure OpenAI');
   }
 };
-

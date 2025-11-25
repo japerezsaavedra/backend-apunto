@@ -1,6 +1,6 @@
 import express, { Request, Response } from 'express';
 import { extractTextFromImage } from '../services/ocrService';
-import { analyzeTextWithGemini } from '../services/geminiService';
+import { analyzeTextWithAzureOpenAI } from '../services/azureOpenAIService';
 import { base64ToBuffer, isValidImageDataUri, getMimeTypeFromDataUri } from '../utils/imageConverter';
 import * as HistoryService from '../services/historyService';
 
@@ -75,7 +75,7 @@ router.post('/analyze', async (req: Request, res: Response) => {
       });
     }
 
-    // Paso 1: Extraer texto con OCR (Google Vision API o Tesseract.js)
+    // Paso 1: Extraer texto con OCR (Azure Document Intelligence)
     console.log('Iniciando extracción de texto con OCR...');
     const extractedText = await extractTextFromImage(imageBuffer);
 
@@ -86,10 +86,10 @@ router.post('/analyze', async (req: Request, res: Response) => {
       });
     }
 
-    // Paso 2: Analizar con Gemini LLM
-    console.log('Iniciando análisis con Google Gemini...');
-    const analysis = await analyzeTextWithGemini(extractedText, description);
-    console.log('Análisis completado con Google Gemini');
+    // Paso 2: Analizar con Azure OpenAI (GPT-4o)
+    console.log('Iniciando análisis con Azure OpenAI...');
+    const analysis = await analyzeTextWithAzureOpenAI(extractedText, description);
+    console.log('Análisis completado con Azure OpenAI');
 
     // Respuesta exitosa
     const response: AnalyzeResponse = {
@@ -123,7 +123,7 @@ router.post('/analyze', async (req: Request, res: Response) => {
 
   } catch (error) {
     console.error('Error en /api/analyze:', error);
-    
+
     if (error instanceof Error) {
       // Errores conocidos
       if (error.message.includes('no está configurado')) {

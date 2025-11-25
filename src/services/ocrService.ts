@@ -1,138 +1,109 @@
-import { createWorker, Worker } from 'tesseract.js';
+/**
+ * Servicio de OCR usando Azure Document Intelligence
+ * Usa el modelo prebuilt-read con API version 2023-07-31
+ */
+
+const AZURE_DOC_ENDPOINT = process.env.AZURE_DOC_ENDPOINT;
+const AZURE_DOC_KEY = process.env.AZURE_DOC_KEY;
+
+if (!AZURE_DOC_ENDPOINT || !AZURE_DOC_KEY) {
+  console.warn('Azure Document Intelligence no está configurado. Variables de entorno faltantes.');
+}
 
 /**
- * Extrae texto de una imagen usando Tesseract.js OCR (por defecto)
- * o Google Vision API si está configurado
- * 
- * Tesseract.js: Gratis, ilimitado, local, open source
- * Google Vision API: 1,000 unidades/mes gratis, luego $1.50 por 1,000 unidades
+ * Extrae texto de una imagen usando Azure Document Intelligence
  */
 export const extractTextFromImage = async (imageBuffer: Buffer): Promise<string> => {
-  // Verificar si se debe usar Google Vision API
-  const useGoogleVision = process.env.USE_GOOGLE_VISION_OCR === 'true';
-  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_VISION_API_KEY;
-
-  if (useGoogleVision && apiKey) {
-    return extractTextFromImageWithGoogleVision(imageBuffer);
+  if (!AZURE_DOC_ENDPOINT || !AZURE_DOC_KEY) {
+    throw new Error('Azure Document Intelligence no está configurado. Por favor, configura las variables de entorno AZURE_DOC_ENDPOINT y AZURE_DOC_KEY');
   }
 
-  // Por defecto usar Tesseract.js (gratis, ilimitado)
-  return extractTextFromImageWithTesseract(imageBuffer);
-};
-
-/**
- * Extrae texto usando Tesseract.js (gratis, ilimitado, local)
- */
-const extractTextFromImageWithTesseract = async (imageBuffer: Buffer): Promise<string> => {
-  let worker: Worker | null = null;
-  
   try {
-    console.log('Iniciando extracción de texto con Tesseract.js OCR (gratis, local)...');
-    
-    // Crear worker con soporte para español e inglés
-    worker = await createWorker('spa+eng');
-    
-    // Reconocer texto de la imagen
-    const { data: { text } } = await worker.recognize(imageBuffer);
+    console.log('Iniciando extracción de texto con Azure Document Intelligence...');
 
-    if (!text || text.trim().length === 0) {
+    const url = `${AZURE_DOC_ENDPOINT.replace(/\/$/, '')}/formrecognizer/documentModels/prebuilt-read:analyze?api-version=2023-07-31`;
+
+    const headers = {
+      'Ocp-Apim-Subscription-Key': AZURE_DOC_KEY,
+      'Content-Type': 'image/jpeg'
+    };
+
+    // Iniciar el análisis
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: headers,
+      body: imageBuffer
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({})) as { error?: { message?: string } };
+      throw new Error(
+        errorData.error?.message || `Error de Azure Document Intelligence: ${response.status}`
+      );
+    }
+
+    // Obtener la URL de operación para polling
+    const operationLocation = response.headers.get('operation-location');
+    if (!operationLocation) {
+      throw new Error('No se recibió operation-location header en la respuesta de OCR');
+    }
+
+    // Polling hasta que termine el análisis
+    console.log('Esperando resultados del OCR...');
+    let result;
+    while (true) {
+      const pollResponse = await fetch(operationLocation, {
+        headers: {
+          'Ocp-Apim-Subscription-Key': AZURE_DOC_KEY
+        }
+      });
+
+      if (!pollResponse.ok) {
+        throw new Error(`Error al consultar estado del OCR: ${pollResponse.status}`);
+      }
+
+      result = await pollResponse.json() as {
+        status: string;
+        analyzeResult?: {
+          pages: Array<{
+            lines: Array<{
+              content: string;
+            }>;
+          }>;
+        };
+      };
+
+      const status = result.status;
+      if (status === 'succeeded' || status === 'failed') {
+        break;
+      }
+
+      // Esperar 1 segundo antes de volver a consultar
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    if (result.status !== 'succeeded') {
+      throw new Error(`OCR falló: ${JSON.stringify(result)}`);
+    }
+
+    // Extraer el texto de todas las páginas
+    const pages = result.analyzeResult?.pages || [];
+    const texto = pages
+      .flatMap(page => page.lines.map(line => line.content))
+      .join('\n');
+
+    if (!texto || texto.trim().length === 0) {
       return 'No se pudo extraer texto del documento.';
     }
 
-    console.log('Extracción de texto con Tesseract.js completada exitosamente');
-    return text.trim();
+    console.log('Extracción de texto con Azure Document Intelligence completada exitosamente');
+    return texto.trim();
   } catch (error) {
-    console.error('Error en Tesseract.js OCR:', error);
+    console.error('Error en Azure Document Intelligence:', error);
     if (error instanceof Error) {
       throw new Error(`Error al procesar el documento con OCR: ${error.message}`);
     }
     throw new Error('Error desconocido al procesar el documento con OCR');
-  } finally {
-    // Asegurarse de terminar el worker siempre
-    if (worker) {
-      await worker.terminate().catch(() => {
-        // Ignorar errores al terminar
-      });
-    }
-  }
-};
-
-/**
- * Extrae texto usando Google Vision API
- * Tier gratuito: 1,000 unidades/mes
- * Después: $1.50 por cada 1,000 unidades
- * Requiere GEMINI_API_KEY o GOOGLE_VISION_API_KEY
- */
-const extractTextFromImageWithGoogleVision = async (
-  imageBuffer: Buffer
-): Promise<string> => {
-  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_VISION_API_KEY;
-  
-  if (!apiKey) {
-    throw new Error('Google Vision API no está configurado. Se requiere GEMINI_API_KEY o GOOGLE_VISION_API_KEY');
-  }
-
-  try {
-    console.log('Iniciando extracción de texto con Google Vision API...');
-    
-    // Convertir buffer a base64
-    const base64Image = imageBuffer.toString('base64');
-    
-    // Llamar a Google Vision API
-    const response = await fetch(
-      `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          requests: [
-            {
-              image: {
-                content: base64Image,
-              },
-              features: [
-                {
-                  type: 'DOCUMENT_TEXT_DETECTION', // Detecta texto en documentos, incluyendo ecuaciones escritas a mano
-                },
-              ],
-              imageContext: {
-                languageHints: ['es', 'en'], // Español e inglés para mejor detección
-              },
-            },
-          ],
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      const errorData = (await response.json().catch(() => ({}))) as { error?: { message?: string } };
-      throw new Error(
-        errorData.error?.message || `Error de Google Vision API: ${response.status}`
-      );
-    }
-
-    const data = (await response.json()) as {
-      responses: Array<{ textAnnotations?: Array<{ description?: string }> }>;
-    };
-    const textAnnotations = data.responses[0]?.textAnnotations;
-
-    if (!textAnnotations || textAnnotations.length === 0) {
-      return 'No se pudo extraer texto del documento.';
-    }
-
-    // El primer elemento contiene todo el texto
-    const extractedText = textAnnotations[0].description || '';
-    
-    console.log('Extracción de texto con Google Vision completada exitosamente');
-    return extractedText.trim();
-  } catch (error) {
-    console.error('Error en Google Vision API:', error);
-    if (error instanceof Error) {
-      throw new Error(`Error al procesar el documento con Google Vision: ${error.message}`);
-    }
-    throw new Error('Error desconocido al procesar el documento con Google Vision');
   }
 };
 

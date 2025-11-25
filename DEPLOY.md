@@ -34,11 +34,42 @@ az webapp create \
    - Operating System: Linux
    - Plan: B1 (Basic) o superior
 
-### 2. Obtener el Publish Profile
+### 2. Crear Service Principal para GitHub Actions
 
-1. Ve a Azure Portal → App Service → `apunto-backend`
-2. Click en "Get publish profile" (en la barra superior)
-3. Descarga el archivo `.PublishSettings`
+Como la autenticación básica está deshabilitada, usaremos un Service Principal:
+
+**Opción A: Usando Azure CLI**
+```bash
+# Reemplaza {subscription-id} con tu subscription ID
+az ad sp create-for-rbac --name "apunto-github-actions" \
+  --role contributor \
+  --scopes /subscriptions/{subscription-id}/resourceGroups/{resource-group-name} \
+  --sdk-auth
+```
+
+Esto generará un JSON como este:
+```json
+{
+  "clientId": "...",
+  "clientSecret": "...",
+  "subscriptionId": "...",
+  "tenantId": "...",
+  "activeDirectoryEndpointUrl": "...",
+  "resourceManagerEndpointUrl": "...",
+  "activeDirectoryGraphResourceId": "...",
+  "sqlManagementEndpointUrl": "...",
+  "galleryEndpointUrl": "...",
+  "managementEndpointUrl": "..."
+}
+```
+
+**Opción B: Usando Azure Portal**
+1. Ve a Azure Portal → Azure Active Directory → App registrations
+2. New registration → Nombre: `apunto-github-actions`
+3. Ve a Certificates & secrets → New client secret
+4. Copia el valor del secret (solo se muestra una vez)
+5. Ve a Subscriptions → Tu suscripción → Access control (IAM)
+6. Add → Add role assignment → Contributor → Asigna al Service Principal
 
 ### 3. Configurar GitHub Secrets
 
@@ -46,45 +77,52 @@ az webapp create \
 2. Settings → Secrets and variables → Actions
 3. Click en "New repository secret"
 4. Agrega:
-   - **Name**: `AZURE_WEBAPP_PUBLISH_PROFILE`
-   - **Value**: Copia TODO el contenido del archivo `.PublishSettings` descargado
+   - **Name**: `AZURE_CREDENTIALS`
+   - **Value**: El JSON completo del Service Principal (del paso anterior)
 
-### 4. Configurar Variables de Entorno en Azure
+### 5. Configurar Variables de Entorno en Azure
 
 1. Ve a Azure Portal → App Service → `apunto-backend`
 2. Configuration → Application settings
 3. Click en "New application setting" y agrega:
 
    **Variables Requeridas:**
-   - `GEMINI_API_KEY`: Tu API key de Google Gemini
+   - `AZURE_DOC_ENDPOINT`: Endpoint de Azure Document Intelligence
+   - `AZURE_DOC_KEY`: Key de Azure Document Intelligence
+   - `AZURE_OPENAI_ENDPOINT`: Endpoint de Azure OpenAI (services.ai.azure.com)
+   - `AZURE_OPENAI_KEY`: Key de Azure OpenAI
+   - `AZURE_OPENAI_DEPLOYMENT`: Nombre del deployment (ej: `gpt-4o`)
    - `DATABASE_URL`: URL de conexión a PostgreSQL
    - `DATABASE_SSL`: `true` (para conexiones cloud)
 
    **Variables Opcionales:**
    - `CORS_ORIGIN`: Origen permitido (ej: `https://tu-app.com` o `*`)
-   - `USE_GOOGLE_VISION_OCR`: `true` o `false` (default: `false`)
    - `PORT`: Puerto del servidor (default: `3000`, Azure lo configura automáticamente)
    - `NODE_ENV`: `production`
 
 4. Click en "Save"
 
-### 5. Configurar el Workflow
+### 4. Configurar el Workflow
 
 Edita `.github/workflows/azure-deploy.yml` y ajusta:
 - `AZURE_WEBAPP_NAME`: Cambia `apunto-backend` por el nombre de tu App Service
+- `AZURE_RESOURCE_GROUP`: (Opcional) Si quieres especificar el resource group explícitamente
 
 ## Configuración de Variables de Entorno
 
 ### Variables Requeridas
 
-- `GEMINI_API_KEY`: API key de Google Gemini (obligatorio)
+- `AZURE_DOC_ENDPOINT`: Endpoint de Azure Document Intelligence (obligatorio)
+- `AZURE_DOC_KEY`: Key de Azure Document Intelligence (obligatorio)
+- `AZURE_OPENAI_ENDPOINT`: Endpoint de Azure OpenAI Foundry (obligatorio)
+- `AZURE_OPENAI_KEY`: Key de Azure OpenAI (obligatorio)
+- `AZURE_OPENAI_DEPLOYMENT`: Nombre del deployment de GPT-4o (obligatorio)
 - `DATABASE_URL`: URL de conexión a PostgreSQL (obligatorio)
 - `DATABASE_SSL`: `true` para conexiones cloud (obligatorio)
 - `CORS_ORIGIN`: Origen permitido para CORS (opcional, default: `*`)
 
 ### Variables Opcionales
 
-- `USE_GOOGLE_VISION_OCR`: `true` para usar Google Vision API, `false` para Tesseract.js
 - `PORT`: Puerto del servidor (default: `3000`)
 - `NODE_ENV`: Entorno (default: `production`)
 
@@ -122,9 +160,15 @@ O visita la URL en tu navegador: `https://apunto-backend.azurewebsites.net/healt
 - Verifica que el firewall de PostgreSQL permita conexiones desde Azure
 - En Azure Portal, agrega la IP del App Service a las reglas de firewall de PostgreSQL
 
-### Error: "Gemini API key not found"
-- Verifica que `GEMINI_API_KEY` esté configurado en Application settings
-- Asegúrate de que no tenga espacios extra al inicio o final
+### Error: "Azure Document Intelligence no está configurado"
+- Verifica que `AZURE_DOC_ENDPOINT` y `AZURE_DOC_KEY` estén configurados en Application settings
+- Asegúrate de que no tengan espacios extra al inicio o final
+- Verifica que el endpoint termine en `cognitiveservices.azure.com`
+
+### Error: "Azure OpenAI no está configurado"
+- Verifica que `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_KEY` y `AZURE_OPENAI_DEPLOYMENT` estén configurados
+- Asegúrate de que el endpoint termine en `services.ai.azure.com` (Foundry)
+- Verifica que el nombre del deployment sea correcto (ej: `gpt-4o`)
 
 ### Error: "Application failed to start"
 - Revisa los logs en Azure Portal → App Service → Log stream
