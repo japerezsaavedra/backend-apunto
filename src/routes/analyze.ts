@@ -114,17 +114,27 @@ router.post('/analyze', async (req: Request, res: Response) => {
         });
       }
 
-      return res.status(500).json({
+      // Incluir más detalles del error para debugging
+      const errorDetails = {
         error: 'Error al procesar el documento',
         message: error.message,
-      });
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+      };
+
+      console.error('Detalles del error:', errorDetails);
+      
+      return res.status(500).json(errorDetails);
     }
 
     // Error desconocido
-    res.status(500).json({
+    const unknownError = {
       error: 'Error interno del servidor',
       message: 'Ocurrió un error inesperado al procesar el documento',
-    });
+      details: error ? String(error) : 'Error desconocido',
+    };
+    
+    console.error('Error desconocido:', unknownError);
+    res.status(500).json(unknownError);
   }
 });
 
