@@ -188,9 +188,7 @@ backend/
 │   │   └── analyze.ts          # Ruta POST /api/analyze
 │   ├── services/
 │   │   ├── ocrService.ts       # Servicio OCR (Azure Document Intelligence)
-│   │   ├── azureOpenAIService.ts # Servicio Azure OpenAI (GPT-4o)
-│   │   ├── database.ts         # Conexión a PostgreSQL
-│   │   └── historyService.ts   # Servicio de historial
+│   │   └── azureOpenAIService.ts # Servicio Azure OpenAI (GPT-4o)
 │   └── utils/
 │       └── imageConverter.ts   # Utilidades para imágenes
 ├── dist/                      # Código compilado (generado)

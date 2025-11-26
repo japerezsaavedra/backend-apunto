@@ -92,8 +92,6 @@ Esto generará un JSON como este:
    - `AZURE_OPENAI_ENDPOINT`: Endpoint de Azure OpenAI (services.ai.azure.com)
    - `AZURE_OPENAI_KEY`: Key de Azure OpenAI
    - `AZURE_OPENAI_DEPLOYMENT`: Nombre del deployment (ej: `gpt-4o`)
-   - `DATABASE_URL`: URL de conexión a PostgreSQL
-   - `DATABASE_SSL`: `true` (para conexiones cloud)
 
    **Variables Opcionales:**
    - `CORS_ORIGIN`: Origen permitido (ej: `https://tu-app.com` o `*`)
@@ -117,8 +115,6 @@ Edita `.github/workflows/azure-deploy.yml` y ajusta:
 - `AZURE_OPENAI_ENDPOINT`: Endpoint de Azure OpenAI Foundry (obligatorio)
 - `AZURE_OPENAI_KEY`: Key de Azure OpenAI (obligatorio)
 - `AZURE_OPENAI_DEPLOYMENT`: Nombre del deployment de GPT-4o (obligatorio)
-- `DATABASE_URL`: URL de conexión a PostgreSQL (obligatorio)
-- `DATABASE_SSL`: `true` para conexiones cloud (obligatorio)
 - `CORS_ORIGIN`: Origen permitido para CORS (opcional, default: `*`)
 
 ### Variables Opcionales
@@ -153,12 +149,6 @@ O visita la URL en tu navegador: `https://apunto-backend.azurewebsites.net/healt
 - Verifica que el build de TypeScript se complete correctamente
 - Asegúrate de que `dist/` contenga los archivos compilados
 - Revisa los logs en Azure Portal → App Service → Log stream
-
-### Error: "Database connection failed"
-- Verifica que `DATABASE_URL` esté correctamente configurado
-- Asegúrate de que `DATABASE_SSL=true` para conexiones cloud
-- Verifica que el firewall de PostgreSQL permita conexiones desde Azure
-- En Azure Portal, agrega la IP del App Service a las reglas de firewall de PostgreSQL
 
 ### Error: "Azure Document Intelligence no está configurado"
 - Verifica que `AZURE_DOC_ENDPOINT` y `AZURE_DOC_KEY` estén configurados en Application settings

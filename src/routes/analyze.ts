@@ -2,7 +2,6 @@ import express, { Request, Response } from 'express';
 import { extractTextFromImage } from '../services/ocrService';
 import { analyzeTextWithAzureOpenAI } from '../services/azureOpenAIService';
 import { base64ToBuffer, isValidImageDataUri, getMimeTypeFromDataUri } from '../utils/imageConverter';
-import * as HistoryService from '../services/historyService';
 
 const router = express.Router();
 
@@ -99,24 +98,6 @@ router.post('/analyze', async (req: Request, res: Response) => {
       detectedInfo: analysis.detectedInfo,
       tags: analysis.tags,
     };
-
-    // Guardar en historial (sin bloquear si falla)
-    const userId = req.headers['x-user-id'] as string | undefined;
-    try {
-      await HistoryService.saveAnalysis(
-        description.trim(),
-        extractedText.trim(),
-        analysis.summary,
-        analysis.label,
-        analysis.detectedInfo,
-        analysis.tags,
-        userId
-      );
-      console.log('Análisis guardado en historial');
-    } catch (historyError) {
-      // No bloquear la respuesta si falla el guardado en historial
-      console.warn('No se pudo guardar en historial:', historyError);
-    }
 
     console.log('Análisis completado exitosamente');
     res.json(response);
