@@ -19,7 +19,7 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Rutas
-app.use('/api/analyze', analyzeRoutes);
+app.use('/api', analyzeRoutes);
 
 // Ruta de salud
 app.get('/health', (req, res) => {
