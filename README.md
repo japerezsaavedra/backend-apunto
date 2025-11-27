@@ -31,6 +31,8 @@ npm install
 
 ## Configuración
 
+**IMPORTANTE**: El backend NO debe tener credenciales hardcodeadas en el código. Todas las configuraciones sensibles deben estar en variables de entorno.
+
 1. Copia el archivo de ejemplo de variables de entorno:
 
 ```bash
@@ -38,6 +40,8 @@ cp env.example .env
 ```
 
 2. Edita el archivo `.env` y configura tus credenciales de Azure:
+
+**⚠️ NUNCA subas el archivo `.env` al repositorio. Está incluido en `.gitignore` por seguridad.**
 
 ```env
 # Azure Document Intelligence (OCR)
